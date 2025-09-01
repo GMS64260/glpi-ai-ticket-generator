@@ -1,0 +1,1089 @@
+{
+  "name": "GLPI AI Ticket Generator - Public Version",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "\n## AI-Powered Ticket Generation with Dynamic Search",
+        "height": 740,
+        "width": 4452,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -864,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "3349e449-1f6c-470a-ab64-fc6f3eba3507",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        240,
+        192
+      ],
+      "id": "508988ec-f0e0-4dcc-a835-6d73659c8895",
+      "name": "Loop Over Items2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Classification Agent\nSubject:{{ $json.Subject }} \nMessage: {{ $json.Messages }}\nFrom: {{ $json[\"From Email\"] }}\nTo: {{ $json[\"To Email\"] }}\n",
+        "options": {
+          "systemMessage": "# Email Classification Agent for IT Support\n\nYou must METHODICALLY analyze each email to determine if it requires a support ticket.\n\n## STEP 1: Sender Filtering (PRIORITY)\n\n### Immediately REJECT if sender contains:\n- noreply, no-reply, donotreply\n- newsletter, marketing, commercial\n- supervision, monitoring, alert\n- backup, veeam, zabbix\n- microsoft.com, salesforce.com, linkedin.com\n- Vendor domains: dell.com, hp.com, lenovo.com, cisco.com\n\n→ If detected: { \"ticket\": false }\n\n## STEP 2: Commercial Email Detection\n\n### SPAM/COMMERCIAL indicators (at least 2 to reject):\n- \"Promotion\", \"Special Offer\", \"Discount\", \"Webinar\"\n- \"Discover\", \"New Product\", \"Innovative Solution\"\n- \"Click here\", \"Register\", \"Download our\"\n- \"Dear customer\", \"We are pleased to\"\n- Price presence (€, $, rate, cost)\n- More than 3 external links\n- Advertising images or banners\n\n→ If commercial detected: { \"ticket\": false }\n\n## STEP 3: Automatic Content Filtering\n\n### Reject if message contains:\n- \"This email is automatically generated\"\n- \"Automatic notification from\"\n- \"Backup report\" + \"successful/failed\"\n- \"Meeting ID:\", \"Join meeting\"\n- \"commented\", \"shared\", \"mentioned you\"\n- Only statistics/metrics without request\n\n→ If automatic: { \"ticket\": false }\n\n## STEP 4: Real Request Validation\n\n### ACCEPT ONLY if:\n\n**A) Explicit technical problem:**\n- \"not working\", \"error\", \"unable to\"\n- \"blocked\", \"crashed\", \"bug\", \"slow\"\n- \"access denied\", \"password\"\n- \"black screen\", \"no connection\"\n\n**B) Clear assistance request:**\n- \"I need\", \"can you\", \"please\"\n- \"how to\", \"help with\"\n- \"install\", \"configure\", \"create\"\n\n**C) AND comes from internal user:**\n- Email ending with @company.example\n- Identifiable person name\n- Professional usage context\n\n## STEP 5: Categorization (if ticket = true)\n\nAnalyze MAIN keywords:\n- **Hardware** (1): computer, screen, keyboard, mouse, printer\n- **Software** (2): application, program, software, bug, error\n- **Network** (4): connection, wifi, internet, VPN, slow\n- **Access** (5): password, account, authentication, MFA\n- **Telephony** (6): phone, call, line, switchboard\n- **Office 365** (7): Teams, Outlook, Word, Excel, SharePoint\n- **General support** (3): if ambiguous or multiple\n\n## STRICT Response Format\n\n{ \"ticket\": false }\nOR\n{ \"ticket\": true, \"category\": X }"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        416,
+        208
+      ],
+      "id": "cb777319-bc6a-4b62-94f3-c70d5ba680d4",
+      "name": "Classification Agent"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output }}{{ $json.text }}",
+                    "rightValue": "\"ticket\": false",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "02e2a3da-931c-4910-9c43-96a56cf6f207"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "704925a2-c025-4c17-82af-746e642ba97b",
+                    "leftValue": "={{ $json.text }}{{ $json.output }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ticket yes"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        720,
+        208
+      ],
+      "id": "c6fdd1e5-3640-4057-9a73-c1a3bc2f1a0d",
+      "name": "Switch3"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Subject:{{ $json.Subject }}{{ $('InputWorkflow').item.json.Subject }}\nMessage: {{ $json.Messages }}{{ $('InputWorkflow').item.json.Messages }}",
+        "options": {
+          "systemMessage": "## AI Solution Search Agent - GLPI\n\nYou are a specialized assistant that searches for solutions to technical problems by consulting the resolved tickets database.\n\n### Your mission\n- Analyze the problem described in the ticket\n- Search for similar cases in the knowledge base\n- Propose a structured solution\n\n### Response format\n\nIf you find a similar solution:\n[MATCH] Similar ticket found.\n[SOLUTION] {solution from similar ticket}\n[REFERENCE] Ticket #{id} ({date})\n[CONFIDENCE] {score/100}\n\nIf you find nothing similar:\n[NO MATCH] No similar solution found\n\n### Instructions\n- Be brief and precise\n- Only propose the most relevant solution\n- Clearly indicate if your solution comes from a previous case\n- Respond only in the configured language\n- Never modify an existing solution"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        976,
+        224
+      ],
+      "id": "41571670-22f4-4236-8239-7c638f1ef742",
+      "name": "AI Solution Finder"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_GLPI_SERVER/apirest.php/initSession/",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n    \"Content-Type\": \"application/json\",\n    \"App-Token\": \"YOUR_APP_TOKEN_HERE\",\n    \"Authorization\": \"user_token YOUR_USER_TOKEN_HERE\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        224
+      ],
+      "id": "f5c871e7-9e13-4d47-b3b5-f9600eeeb1a6",
+      "name": "GLPI Init Session"
+    },
+    {
+      "parameters": {
+        "url": "=http://YOUR_GLPI_SERVER/apirest.php/search/Ticket?criteria[0][field]=15&criteria[0][searchtype]=morethan&criteria[0][value]=-10 DAY&criteria[1][link]=AND&criteria[1][field]=21&criteria[1][searchtype]=contains&criteria[1][value]={{ $json[\"From Name\"] || $json[\"From Email\"].split('@')[0] }}&sort=15&order=DESC&range=0-9&forcedisplay[0]=1&forcedisplay[1]=21&forcedisplay[2]=15&forcedisplay[3]=1&forcedisplay[4]=12",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Content-Type\": \"application/json\",\n  \"Session-Token\": \"{{ $('GLPI Init Session').item.json.session_token }}\",\n  \"App-Token\": \"YOUR_APP_TOKEN_HERE\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1584,
+        224
+      ],
+      "id": "78715309-7218-478c-9849-88e05561b343",
+      "name": "Check Recent Tickets",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Email to analyze:\n{{ $('Loop Over Items2').item.json.Messages }}\n\nPrevious resolution agent response:\n{{ $('AI Solution Finder').item.json.output }}\n\nUser's recent tickets:\n{{ $('Check Recent Tickets').item.json.data[0][\"1\"] }} \nRecent ticket ID: {{ $('Check Recent Tickets').item.json.data[0][\"2\"] }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "# Information Extraction Agent for GLPI Ticket\n\nYou analyze an email to create or link a GLPI ticket.\n\n## MANDATORY THINKING PROCESS\n\n**USE THE \"THINK\" TOOL to analyze step by step:**\n1. First, think about important keywords from the email\n2. Then, compare with each recent ticket\n3. Next, determine if there's a match\n4. Finally, decide if it's a new ticket or a linked ticket\n\n## After your reflection, respond with this format:\n\nTITLE: [short descriptive title, max 100 characters]\nPROBLEM: [clear problem description]\nSOLUTION: [proposed solution or \"Manual analysis required\"]\nCATEGORY: [category name]\nPRIORITY: [low/medium/high]\nLINKED_TICKET: [number IF match found, otherwise \"none\"]\n\n## Linked tickets detection - STRICT RULES\n\n### CASE 1: Explicit link (PRIORITY)\nIf subject or message contains:\n- A ticket number (#289953, TR:1629, etc.)\n- \"Following ticket\", \"In response to\", \"Regarding ticket\"\n→ EXTRACT this number for LINKED_TICKET\n\n### CASE 2: Match with recent tickets\nIf \"Recent tickets\" section is NOT empty AND contains:\n- A title mentioning the SAME service/application\n- A similar UNRESOLVED problem\n- The SAME technical keywords\n→ USE the ID provided in \"Recent ticket ID\"\n\n### CASE 3: Implicit continuity\nIf email contains:\n- \"still not\", \"again\", \"persists\", \"not resolved\"\n- \"as agreed\", \"following our exchange\"\nAND a recent ticket matches the context\n→ IT'S a linked ticket\n\n## Available categories\n- Hardware\n- Software  \n- General support\n- Network\n- Access and authentication\n- Telephony\n- Office 365\n\n## Final instructions\n- One information per line, no formatting\n- If recent ticket ID provided AND match → ALWAYS use it\n- LINKED_TICKET format: number only (1629, not #1629)\n- When in doubt about match → consider as linked"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1776,
+        224
+      ],
+      "id": "089820d9-981b-42cd-a356-a6a0cd65b9aa",
+      "name": "AI Ticket Assembler"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// PART 1: DATA RETRIEVAL AND EXTRACTION\n// ============================================\n\nconst inputItem = $input.first();\nconst inputWorkflowData = $('Loop Over Items2').first().json;\n\n// Extract basic information\nconst senderName = inputWorkflowData[\"From Name\"] || \"Unknown sender\";\nconst recipientName = inputWorkflowData[\"To Name\"] || \"Unknown recipient\";\nconst senderEmail = (inputWorkflowData[\"From Email\"] || \"\").toLowerCase().trim();\nconst recipientEmail = (inputWorkflowData[\"To Email\"] || \"\").toLowerCase().trim();\nconst originalMessage = inputWorkflowData[\"Messages\"] || \"\";\nconst subject = inputWorkflowData[\"Subject\"] || \"No subject\";\n\n// Extract usernames from emails\nconst senderUsername = senderEmail.split('@')[0].toLowerCase().trim();\nconst recipientUsername = recipientEmail.split('@')[0].toLowerCase().trim();\n\nconsole.log(\"Extracted emails:\", {\n  senderEmail,\n  senderUsername,\n  recipientEmail,\n  recipientUsername\n});\n\n// ============================================\n// PART 2: CATEGORY AND PRIORITY MAPPING\n// ============================================\n\nconst categoryMap = {\n  \"hardware\": 1,\n  \"software\": 2,\n  \"general support\": 3,\n  \"network\": 4,\n  \"access and authentication\": 5,\n  \"telephony\": 6,\n  \"office 365\": 7\n};\n\nconst priorityMap = {\n  \"low\": 5,\n  \"medium\": 3,\n  \"high\": 1\n};\n\n// ============================================\n// PART 3: AGENT OUTPUT PARSING\n// ============================================\n\nfunction parseAgentOutput(output) {\n  const result = {\n    title: \"\",\n    problem: \"\",\n    solution: \"\",\n    category: 3,\n    priority: 3,\n    linkedTicket: \"\"\n  };\n  \n  const text = typeof output === 'string' ? output : JSON.stringify(output);\n  const lines = text.split('\\n');\n  \n  for (const line of lines) {\n    const cleanLine = line.trim();\n    \n    if (cleanLine.startsWith('TITLE:')) {\n      result.title = cleanLine.substring(6).trim();\n    }\n    else if (cleanLine.startsWith('PROBLEM:')) {\n      result.problem = cleanLine.substring(8).trim();\n    }\n    else if (cleanLine.startsWith('SOLUTION:')) {\n      result.solution = cleanLine.substring(9).trim();\n    }\n    else if (cleanLine.startsWith('CATEGORY:')) {\n      const cat = cleanLine.substring(9).trim().toLowerCase();\n      result.category = categoryMap[cat] || 3;\n    }\n    else if (cleanLine.startsWith('PRIORITY:')) {\n      const prio = cleanLine.substring(9).trim().toLowerCase();\n      result.priority = priorityMap[prio] || 3;\n    }\n    else if (cleanLine.startsWith('LINKED_TICKET:')) {\n      result.linkedTicket = cleanLine.substring(14).trim();\n    }\n  }\n  \n  // If no title extracted, use email subject\n  if (!result.title) {\n    result.title = subject;\n  }\n  \n  return result;\n}\n\n// ============================================\n// PART 4: MAIN PROCESSING\n// ============================================\n\ntry {\n  // Get agent output\n  let agentOutput = \"\";\n  \n  if (inputItem.json.output) {\n    agentOutput = inputItem.json.output;\n  } else if (inputItem.json.response) {\n    agentOutput = inputItem.json.response;\n  } else if (inputItem.json.text) {\n    agentOutput = inputItem.json.text;\n  } else {\n    throw new Error(\"No agent output found\");\n  }\n  \n  console.log(\"Agent output:\", agentOutput);\n  \n  // Parse information\n  const ticketInfo = parseAgentOutput(agentOutput);\n  \n  // Determine if linked ticket was found\n  const hasLinkedTicket = ticketInfo.linkedTicket && \n                          ticketInfo.linkedTicket !== \"none\" && \n                          ticketInfo.linkedTicket !== \"\" &&\n                          !isNaN(ticketInfo.linkedTicket);\n  \n  console.log(\"Linked ticket detected:\", hasLinkedTicket ? ticketInfo.linkedTicket : \"No\");\n  \n  // Build formatted HTML content\n  let content = `<b>Problem:</b><br>${ticketInfo.problem}<br><br>`;\n  \n  if (ticketInfo.solution && ticketInfo.solution !== \"Manual analysis required\") {\n    content += `<b>Proposed solution:</b><br>${ticketInfo.solution}<br><br>`;\n  }\n  \n  content += `<b>Contact information:</b><br>`;\n  content += `From: ${senderName} (${senderEmail})<br>`;\n  content += `To: ${recipientName} (${recipientEmail}}<br><br>`;\n  content += `<b>Original message:</b><br>`;\n  content += `<pre>${originalMessage}</pre><br>`;\n  \n  if (hasLinkedTicket) {\n    content += `<i>Response added to ticket #${ticketInfo.linkedTicket}</i>`;\n  } else {\n    content += `<i>Ticket automatically created by AI</i>`;\n  }\n  \n  // Calculate urgency and impact based on priority\n  let urgency = 3, impact = 3;\n  if (ticketInfo.priority === 1) { // High\n    urgency = 2;\n    impact = 2;\n  } else if (ticketInfo.priority === 5) { // Low\n    urgency = 4;\n    impact = 4;\n  }\n  \n  // ============================================\n  // PART 5: BUILD FINAL JSON\n  // ============================================\n  \n  const ticketData = {\n    // Ticket data\n    input: {\n      name: ticketInfo.title.substring(0, 100),\n      content: content,\n      type: 1,\n      status: hasLinkedTicket ? 2 : 1, // 2 = In progress if linked, 1 = New otherwise\n      priority: ticketInfo.priority,\n      urgency: urgency,\n      impact: impact,\n      entities_id: 0,\n      itilcategories_id: ticketInfo.category\n    },\n    // Data for user searches\n    senderUsername: senderUsername,\n    recipientUsername: recipientUsername,\n    senderEmail: senderEmail,\n    recipientEmail: recipientEmail,\n    // Linked ticket information\n    hasLinkedTicket: hasLinkedTicket,\n    linkedTicketId: hasLinkedTicket ? parseInt(ticketInfo.linkedTicket) : null\n  };\n  \n  console.log(\"Prepared ticket:\", JSON.stringify(ticketData, null, 2));\n  \n  return [{ json: ticketData }];\n  \n} catch (error) {\n  console.error(\"Error:\", error.message);\n  \n  // Default error ticket\n  return [{\n    json: {\n      input: {\n        name: subject.substring(0, 100),\n        content: `<b>Error during automatic processing</b><br><br>\n        Subject: ${subject}<br>\n        From: ${senderName} (${senderEmail}}<br>\n        To: ${recipientName} (${recipientEmail}}<br><br>\n        <b>Original message:</b><br>\n        <pre>${originalMessage}</pre><br><br>\n        <b>Technical error:</b> ${error.message}`,\n        type: 1,\n        status: 1,\n        priority: 3,\n        urgency: 3,\n        impact: 3,\n        entities_id: 0,\n        itilcategories_id: 3\n      },\n      senderUsername: senderUsername || \"\",\n      recipientUsername: recipientUsername || \"\",\n      senderEmail: senderEmail,\n      recipientEmail: recipientEmail,\n      hasLinkedTicket: false,\n      linkedTicketId: null\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        224
+      ],
+      "id": "8a209d53-6761-492a-9661-5aab52df0439",
+      "name": "Prepare GLPI Data"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        896,
+        64
+      ],
+      "id": "2e4d280c-3204-4eb1-9948-51cf2c03f219",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "model": "YOUR_MODEL_HERE",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        384,
+        416
+      ],
+      "id": "a6853c0a-43e8-4792-8c7c-b6d0037034a4",
+      "name": "Ollama Chat Model Classification"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        448
+      ],
+      "id": "d25c23fa-67c5-44f8-b3da-32080ccc8e5e",
+      "name": "Think Tool 1"
+    },
+    {
+      "parameters": {
+        "model": "YOUR_MODEL_HERE",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        960,
+        384
+      ],
+      "id": "d08ac12d-a3c9-435b-9bfd-c8852bcab96b",
+      "name": "Ollama Chat Model Resolver"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        416
+      ],
+      "id": "dac2a568-82a4-46df-818f-d42bb859ca80",
+      "name": "Think Tool 2"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "ticket_base",
+        "toolDescription": "resolved tickets and IT service tutorials",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "company_tickets",
+          "mode": "list",
+          "cachedResultName": "company_tickets"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        432
+      ],
+      "id": "b9bd6f62-4c3d-4936-b659-eeafd3f1a257",
+      "name": "Qdrant Vector Store"
+    },
+    {
+      "parameters": {
+        "model": "mistral:latest"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        576
+      ],
+      "id": "7c3ad3a1-cbf3-41eb-a151-dd169af38b10",
+      "name": "Embeddings Ollama"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [
+        1904,
+        464
+      ],
+      "id": "d7ecc1bd-09ca-48a9-86e3-bc3e16774083",
+      "name": "Think Tool 3"
+    },
+    {
+      "parameters": {
+        "model": "YOUR_MODEL_HERE",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        464
+      ],
+      "id": "4dca9f64-8577-4326-8401-7c7b4e68d414",
+      "name": "Ollama Chat Model Assembler"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.hasLinkedTicket }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Linked ticket found"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.hasLinkedTicket }}",
+                    "rightValue": false,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "New ticket"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2304,
+        224
+      ],
+      "id": "581fe785-1fd2-4212-9080-42d49670a2a1",
+      "name": "Switch Linked Ticket"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://YOUR_GLPI_SERVER/apirest.php/ITILFollowup/",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Content-Type\": \"application/json\",\n  \"Session-Token\": \"{{$('GLPI Init Session').item.json[\"session_token\"]}}\",\n  \"App-Token\": \"YOUR_APP_TOKEN_HERE\"\n}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  input: {\n    items_id: $json.linkedTicketId,\n    itemtype: \"Ticket\",\n    content: $json.input.content,\n    users_id: 7,\n    is_private: 0,\n    requesttypes_id: 1\n  }\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2512,
+        208
+      ],
+      "id": "bb69ff04-33fc-453a-86f2-577d34317081",
+      "name": "Add Followup to Ticket",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "=http://YOUR_GLPI_SERVER/apirest.php/search/User?criteria[0][field]=1&criteria[0][searchtype]=contains&criteria[0][value]={{ $('Prepare GLPI Data').item.json.senderUsername }}&forcedisplay[0]=2",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Content-Type\": \"application/json\",\n  \"Session-Token\": \"{{ $('GLPI Init Session').item.json.session_token }}\",\n  \"App-Token\": \"YOUR_APP_TOKEN_HERE\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2496,
+        384
+      ],
+      "id": "4b64ffbc-4e31-4be2-b0f2-2d809f5bcb20",
+      "name": "Search Requester"
+    },
+    {
+      "parameters": {
+        "url": "=http://YOUR_GLPI_SERVER/apirest.php/search/User?criteria[0][field]=1&criteria[0][searchtype]=contains&criteria[0][value]={{ $('Prepare GLPI Data').item.json.recipientUsername }}&forcedisplay[0]=2",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Content-Type\": \"application/json\",\n  \"Session-Token\": \"{{ $('GLPI Init Session').item.json.session_token }}\",\n  \"App-Token\": \"YOUR_APP_TOKEN_HERE\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2672,
+        384
+      ],
+      "id": "f046005d-6074-44d8-9a61-ac4a18f3fd04",
+      "name": "Search Observer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get data\nconst ticketData = $('Prepare GLPI Data').item.json;\nconst senderResult = $('Search Requester').item.json;\nconst observerResult = $('Search Observer').item.json;\n\n// Extract user IDs (default Admin ID:7)\nlet requesterId = 7;\nlet observerId = 7;\n\n// Get requester ID if found\nif (senderResult.data && senderResult.data.length > 0) {\n  requesterId = senderResult.data[0][\"2\"]; // ID is in data[0][\"2\"]\n  console.log(`Requester found: ${ticketData.senderUsername} -> ID ${requesterId}`);\n} else {\n  console.log(`Requester not found: ${ticketData.senderUsername}, using default ID`);\n}\n\n// Get observer ID if found\nif (observerResult.data && observerResult.data.length > 0) {\n  observerId = observerResult.data[0][\"2\"]; // ID is in data[0][\"2\"]\n  console.log(`Observer found: ${ticketData.recipientUsername} -> ID ${observerId}`);\n} else {\n  console.log(`Observer not found: ${ticketData.recipientUsername}, using default ID`);\n}\n\n// Return complete data with user IDs\nreturn [{\n  json: {\n    input: {\n      ...ticketData.input,\n      _users_id_requester: requesterId,\n      _users_id_observer: observerId\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2864,
+        384
+      ],
+      "id": "2d5f99a9-0bf6-4dbe-885a-9e1a5aed6258",
+      "name": "Finalize Ticket"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_GLPI_SERVER/apirest.php/Ticket/",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={\n  \"Content-Type\": \"application/json\",\n  \"Session-Token\": \"{{$('GLPI Init Session').item.json[\"session_token\"]}}\",\n  \"App-Token\": \"YOUR_APP_TOKEN_HERE\"\n}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ input: $json.input }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3072,
+        384
+      ],
+      "id": "7f3daf6f-1390-4999-8d72-270a86874505",
+      "name": "Create New Ticket"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "unit": "minutes"
+            }
+          ]
+        },
+        "output": "fields",
+        "fields": [
+          "body",
+          "sender",
+          "toRecipients",
+          "subject"
+        ],
+        "filters": {
+          "foldersToInclude": [
+            "YOUR_FOLDER_ID_HERE"
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.microsoftOutlookTrigger",
+      "typeVersion": 1,
+      "position": [
+        -816,
+        304
+      ],
+      "id": "0434499c-21b6-4fa7-a630-24760fbbd61d",
+      "name": "Microsoft Outlook Trigger"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Lightweight script for text extraction from Outlook emails in n8n\n# Place in a \"Code\" node with Python (Beta)\n\ndef extractTextFromHtml(html):\n    if not html:\n        return \"\"\n    \n    # Remove HTML tags and clean text\n    result = html\n    \n    # Remove styles and scripts\n    while '<style' in result and '</style>' in result:\n        start = result.find('<style')\n        end = result.find('</style>', start) + len('</style>')\n        if start >= 0 and end > 0:\n            result = result[:start] + result[end:]\n    \n    while '<script' in result and '</script>' in result:\n        start = result.find('<script')\n        end = result.find('</script>', start) + len('</script>')\n        if start >= 0 and end > 0:\n            result = result[:start] + result[end:]\n    \n    # Replace all tags with spaces\n    import re\n    result = re.sub(r'<[^>]*>', ' ', result)\n    \n    # Replace common HTML entities\n    replacements = [\n        ('&nbsp;', ' '),\n        ('&amp;', '&'),\n        ('&lt;', '<'),\n        ('&gt;', '>'),\n        ('&quot;', '\"'),\n        ('&#39;', \"'\")\n    ]\n    \n    for old, new in replacements:\n        result = result.replace(old, new)\n    \n    # Reduce multiple spaces to one\n    result = re.sub(r'\\s+', ' ', result)\n    \n    return result.strip()\n\n# List to store modified items\nmodified_items = []\n\n# Process each item\nfor item in items:\n    # Make a copy of the item\n    modified_item = dict(item)\n    \n    # Get HTML content using correct structure\n    # Access item.json.body.content as suggested\n    html_content = \"\"\n    if \"json\" in modified_item:\n        if \"body\" in modified_item[\"json\"]:\n            if \"content\" in modified_item[\"json\"][\"body\"]:\n                html_content = modified_item[\"json\"][\"body\"][\"content\"]\n    \n    # Extract and add clean text\n    modified_item[\"json\"][\"cleanText\"] = extractTextFromHtml(html_content)\n    \n    # Add modified item to list\n    modified_items.append(modified_item)\n\n# Return modified items\nreturn modified_items"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -592,
+        304
+      ],
+      "id": "e90e4194-c093-46a4-b833-7adcf280ea4b",
+      "name": "HTML Filter"
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "messageId": {
+          "__rl": true,
+          "value": "={{ $('Microsoft Outlook Trigger').item.json.id }}",
+          "mode": "id"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_PROCESSED_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "Processed_Tickets",
+          "cachedResultUrl": "https://outlook.office365.com/mail/YOUR_FOLDER_URL"
+        }
+      },
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        3344,
+        384
+      ],
+      "id": "ae581f3d-eb6c-4c2b-a2c4-06ad273a7d24",
+      "name": "Archive Processed Email"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "944bf112-3f62-4c99-883d-92f5085b17cd",
+                    "leftValue": "={{ $json.sender.emailAddress.address }}",
+                    "rightValue": "admin@company.example",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.subject }}",
+                    "rightValue": "GLPI",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "25041891-6dee-4cf6-879b-9983637d2cba"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a8d9fb9d-a551-4e14-93e0-ea083b2d8c99",
+                    "leftValue": "={{ $json.sender.emailAddress.address }}",
+                    "rightValue": "noreply",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "5aed3f10-0aa5-4728-a2b7-a1f53a104362",
+                    "leftValue": "={{ $('Microsoft Outlook Trigger').item.json.subject }}",
+                    "rightValue": "Accepted",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3e01019f-dbbd-4ac1-b2a1-3d5c2589ae70",
+                    "leftValue": "={{ $('Microsoft Outlook Trigger').item.json.subject }}",
+                    "rightValue": "Declined",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "071e4c22-c813-48cb-bf9e-90103f975c01",
+                    "leftValue": "={{ $json.subject }}",
+                    "rightValue": "RE:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "084bf209-7ca2-4523-9e1b-ae33fb4e3e3c",
+                    "leftValue": "={{ $json.subject }}",
+                    "rightValue": "FW:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "13cfaa62-124a-43bc-8857-9111cafa509b",
+                    "leftValue": "={{ $json.sender.emailAddress.address }}",
+                    "rightValue": "team@company.example",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "5175a575-9633-4806-8bba-1dcf6079e411",
+                    "leftValue": "={{ $json.subject }}",
+                    "rightValue": "GLPI",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notContains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "To process"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -320,
+        128
+      ],
+      "id": "60b36219-4edd-47b1-8aba-bc16a15f977d",
+      "name": "Email Filter"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Loop Over Items2": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Classification Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classification Agent": {
+      "main": [
+        [
+          {
+            "node": "Switch3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch3": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Solution Finder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Solution Finder": {
+      "main": [
+        [
+          {
+            "node": "GLPI Init Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GLPI Init Session": {
+      "main": [
+        [
+          {
+            "node": "Check Recent Tickets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Recent Tickets": {
+      "main": [
+        [
+          {
+            "node": "AI Ticket Assembler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Ticket Assembler": {
+      "main": [
+        [
+          {
+            "node": "Prepare GLPI Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare GLPI Data": {
+      "main": [
+        [
+          {
+            "node": "Switch Linked Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Operation, do nothing": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model Classification": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classification Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool 1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Classification Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model Resolver": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Solution Finder",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool 2": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Solution Finder",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Solution Finder",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Think Tool 3": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Ticket Assembler",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model Assembler": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Ticket Assembler",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Linked Ticket": {
+      "main": [
+        [
+          {
+            "node": "Add Followup to Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search Requester",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Followup to Ticket": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Requester": {
+      "main": [
+        [
+          {
+            "node": "Search Observer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Observer": {
+      "main": [
+        [
+          {
+            "node": "Finalize Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Ticket": {
+      "main": [
+        [
+          {
+            "node": "Create New Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Ticket": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Archive Processed Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Microsoft Outlook Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTML Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML Filter": {
+      "main": [
+        [
+          {
+            "node": "Email Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Filter": {
+      "main": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          {
+            "node": "Loop Over Items2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "anonymized-version-1.0",
+  "meta": {
+    "instanceId": "anonymous-instance",
+    "description": "AI-powered GLPI ticket generation workflow with email classification, solution search, and automatic ticket creation/linking"
+  },
+  "id": "anonymous-workflow-id",
+  "tags": ["glpi", "ai", "automation", "ticketing", "email"]
+}
